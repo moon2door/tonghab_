@@ -8,6 +8,8 @@ public class CraneParts : MonoBehaviour
 {
     // [추가] 타워의 초기 회전값을 저장할 변수 선언
     Vector3 initCraneTowerEulerAngles;
+    // [추가] 현재 azimuth 값을 저장할 변수
+    float currentAzimuth;
 
     #region Variable
     public enum CraneType
@@ -18,7 +20,7 @@ public class CraneParts : MonoBehaviour
         TTC
     }
     public int craneIndex;
-    public CraneType craneType = CraneType.LLC;
+    public CraneType craneType = CraneParts.CraneType.LLC;
     [Header("Crane Data")]
     public bool isWork;
 
@@ -37,18 +39,19 @@ public class CraneParts : MonoBehaviour
     public Vector3 cranePositionOffset;
     public float bodyAngleOffset;
     public float jibAngleOffset;
-    [SerializeField] float clampMin = .1f, clampMax =.9f , clampValue;
+    [SerializeField] float clampMin = .1f, clampMax = .9f, clampValue;
     [SerializeField] Vector3 pointCloudPositionOffset;
     [SerializeField] float pointCloudRotationOffset;
-   [Header("Public Crane Parts")]
+    [Header("Public Crane Parts")]
     [SerializeField] Transform craneJib;
     [SerializeField] Transform craneTower;
     [SerializeField] Transform cranwTowerJoint;
 
     [Header("LLC Crane Parts")]
     [SerializeField] Transform craneBody;
-    public Transform CraneBody{
-        get 
+    public Transform CraneBody
+    {
+        get
         {
             return craneBody;
         }
@@ -85,7 +88,7 @@ public class CraneParts : MonoBehaviour
     Vector3 startUnity;
     Vector3 endUnity;
     // 시작과 끝 GPS 좌표의 거리 계산
-    float totalDistance ;
+    float totalDistance;
     #endregion
     private void Awake()
     {
@@ -133,11 +136,11 @@ public class CraneParts : MonoBehaviour
 
     public void ReadConfigOffset()
     {
-        cranePositionOffset = CsCore.Configuration.StringToVector3(CsCore.Configuration.ReadConfigIni("CranePositionOffset", pierName+"_"+craneName, cranePositionOffset.x.ToString()+ ","+cranePositionOffset.y.ToString()+","+cranePositionOffset.z.ToString()));
-        bodyAngleOffset = float.Parse(CsCore.Configuration.ReadConfigIni("CraneBodyAngleOffset", pierName+"_"+craneName, "0"));
-        jibAngleOffset = float.Parse(CsCore.Configuration.ReadConfigIni("CraneJibAngleOffset", pierName+"_"+craneName, "0"));
-        pointCloudPositionOffset = CsCore.Configuration.StringToVector3(CsCore.Configuration.ReadConfigIni("pointCloudPositionOffset", pierName+"_"+craneName, pointCloudPositionOffset.x.ToString()+ ","+pointCloudPositionOffset.y.ToString()+","+pointCloudPositionOffset.z.ToString()));
-        pointCloudRotationOffset = float.Parse(CsCore.Configuration.ReadConfigIni("pointCloudRotationOffset", pierName+"_"+craneName, "0"));
+        cranePositionOffset = CsCore.Configuration.StringToVector3(CsCore.Configuration.ReadConfigIni("CranePositionOffset", pierName + "_" + craneName, cranePositionOffset.x.ToString() + "," + cranePositionOffset.y.ToString() + "," + cranePositionOffset.z.ToString()));
+        bodyAngleOffset = float.Parse(CsCore.Configuration.ReadConfigIni("CraneBodyAngleOffset", pierName + "_" + craneName, "0"));
+        jibAngleOffset = float.Parse(CsCore.Configuration.ReadConfigIni("CraneJibAngleOffset", pierName + "_" + craneName, "0"));
+        pointCloudPositionOffset = CsCore.Configuration.StringToVector3(CsCore.Configuration.ReadConfigIni("pointCloudPositionOffset", pierName + "_" + craneName, pointCloudPositionOffset.x.ToString() + "," + pointCloudPositionOffset.y.ToString() + "," + pointCloudPositionOffset.z.ToString()));
+        pointCloudRotationOffset = float.Parse(CsCore.Configuration.ReadConfigIni("pointCloudRotationOffset", pierName + "_" + craneName, "0"));
     }
     public void SetJibAngle(float angle)
     {
@@ -147,14 +150,17 @@ public class CraneParts : MonoBehaviour
     public void SetCraneRotate(float rotate)
     {
         Debug.Log(rotate);
+        // [수정] 회전값 저장
+        currentAzimuth = rotate;
+
         craneTower.localPosition = new Vector3();
         craneTower.localRotation = new Quaternion();
 
-        if(craneBody)
+        if (craneBody)
         {
             craneBody.transform.localEulerAngles = initCraneBodyEulerAngles;
             craneBody.transform.Rotate(0f, 0f, ((useReverseRotateCrane ? -1 : 1) * rotate) + bodyAngleOffset, Space.Self);
-            
+
         }
         else craneTower.RotateAround(cranwTowerJoint.position, Vector3.up, useReverseRotateCrane ? -1 : 1 * (rotate + pierDir));
         SetPointCloudTransformFromOffset();
@@ -165,17 +171,17 @@ public class CraneParts : MonoBehaviour
         operationRoom.localPosition = operationPos;
         trolly.localPosition = trollyPos;
 
-        if(hookPos1 != Vector3.zero)
+        if (hookPos1 != Vector3.zero)
         {
             hook1High.localPosition = new Vector3(hookPos1.x, hookPos1.y, 0);
             hook1Low.localPosition = new Vector3(hookPos1.x, hookPos1.y, hookPos1.z);
         }
-        if(hookPos2 != Vector3.zero)
+        if (hookPos2 != Vector3.zero)
         {
             hook2High.localPosition = new Vector3(hookPos2.x, hookPos2.y, 17.5f);
             hook2Low.localPosition = new Vector3(hookPos2.x, hookPos2.y, hookPos2.z);
         }
-        if(hookPos3 != Vector3.zero)
+        if (hookPos3 != Vector3.zero)
         {
             hook3High.localPosition = new Vector3(hookPos3.x, hookPos3.y, 17.5f);
             hook3Low.localPosition = new Vector3(hookPos3.x, hookPos3.y, hookPos3.z);
@@ -183,16 +189,16 @@ public class CraneParts : MonoBehaviour
     }
 
 
-    #if UNITY_EDITOR
+#if UNITY_EDITOR
     void Update()
     {
-        if(debugMode)
+        if (debugMode)
         {
-            if(Input.GetKeyDown(KeyCode.Alpha1))
+            if (Input.GetKeyDown(KeyCode.Alpha1))
             {
                 SetPosition(testGPS1.x, testGPS1.y, t_azimuth, t_highAngle);
             }
-            if(Input.GetKeyDown(KeyCode.Alpha2))
+            if (Input.GetKeyDown(KeyCode.Alpha2))
             {
                 SetPosition(testGPS2.x, testGPS2.y, t_azimuth, t_highAngle);
             }
@@ -213,7 +219,20 @@ public class CraneParts : MonoBehaviour
 
         float totalAngleDiff = bodyAngleDiff + towerAngleDiff;
 
-        pointCloudTransform.transform.Rotate(0f, (useReverseRotator ? totalAngleDiff * float.Parse(CsCore.Configuration.ReadConfigIni("PointCloudRotateAmount", "Amount", "1")) : 0f) + pointCloudRotationOffset, 0f, Space.Self);
+        // [수정] useReverseRotateCrane일 경우 azimuth 값으로 직접 회전
+        float rotateAngle = 0f;
+        if (useReverseRotateCrane)
+        {
+            // useReverseRotateCrane이 켜져있으면 부모(craneTower)가 고정이므로 직접 회전 적용
+            // 크레인 회전 방향 로직과 동일하게 적용 ((useReverseRotateCrane ? -1 : 1) * rotate)
+            rotateAngle = (useReverseRotateCrane ? -1 : 1) * currentAzimuth;
+        }
+        else if (useReverseRotator)
+        {
+            rotateAngle = totalAngleDiff * float.Parse(CsCore.Configuration.ReadConfigIni("PointCloudRotateAmount", "Amount", "1"));
+        }
+
+        pointCloudTransform.transform.Rotate(0f, rotateAngle + pointCloudRotationOffset, 0f, Space.Self);
     }
 
     public void SetPosition(double latitude, double longitude, float azimuth, float highAngle)
@@ -221,17 +240,17 @@ public class CraneParts : MonoBehaviour
         SetCraneRotate(azimuth);
         SetJibAngle(highAngle);
 
-        if (refPosition!=null)
+        if (refPosition != null)
         {
-            var _currentGPS  = new Vector2D_Double(CoordinateConverter.ConvertToDecimal(latitude.ToString()), CoordinateConverter.ConvertToDecimal(longitude.ToString(),false));//ReferenceGPSToUnity(CoordinateConverter.ConvertToDecimal(latitude.ToString()), CoordinateConverter.ConvertToDecimal(longitude.ToString()));
-            if(currentGPS ==_currentGPS)return;
+            var _currentGPS = new Vector2D_Double(CoordinateConverter.ConvertToDecimal(latitude.ToString()), CoordinateConverter.ConvertToDecimal(longitude.ToString(), false));//ReferenceGPSToUnity(CoordinateConverter.ConvertToDecimal(latitude.ToString()), CoordinateConverter.ConvertToDecimal(longitude.ToString()));
+            if (currentGPS == _currentGPS) return;
             currentGPS = _currentGPS;
             clampValue = InterpolateGPS(_currentGPS);
             var localOffset = refPosition.transform.TransformDirection(cranePositionOffset);
             Vector3 interpolatedUnity = Vector3.Lerp(refPosition.transform.position, refPosition.endPointUnityPosition.position, clampValue);
             transform.position = interpolatedUnity + localOffset;
         }
-     }
+    }
 
     Vector3 ReferenceGPSToUnity(Vector2D_Double gps)
     {
@@ -242,7 +261,7 @@ public class CraneParts : MonoBehaviour
         var lonRad = gps.y * Mathf.Deg2Rad;
         var lat0Rad = refPosition.startPoint.x * Mathf.Deg2Rad;
         var lon0Rad = refPosition.startPoint.y * Mathf.Deg2Rad;
-        
+
         // X, Y 좌표 계산 (적절한 축척 적용)
         var x = earthRadius * (lonRad - lon0Rad) * Mathf.Cos((float)lat0Rad);
         var y = earthRadius * (latRad - lat0Rad);
@@ -252,7 +271,7 @@ public class CraneParts : MonoBehaviour
 
     public float InterpolateGPS(Vector2D_Double currentGPS)
     {
-         Vector3 currentUnity = ReferenceGPSToUnity(currentGPS);
+        Vector3 currentUnity = ReferenceGPSToUnity(currentGPS);
 
         // 현재 GPS와 시작 GPS 사이의 거리 계산
         float currentDistance = Vector3.Distance(startUnity, currentUnity);

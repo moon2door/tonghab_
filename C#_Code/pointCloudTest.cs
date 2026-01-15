@@ -10,7 +10,7 @@ public class PointManager
         this.pier = parts.pierCode;
         this.crane = parts.craneCode;
 
-        group =  GameObject.Find("pointCloudGroups");
+        group = GameObject.Find("pointCloudGroups");
         pointPoolGroup = new GameObject(parts.craneName + "pool");
         //pjh
         pointGroup = parts.pointCloudTransform;
@@ -18,7 +18,7 @@ public class PointManager
         pointPoolGroup.transform.localPosition = Vector3.zero;
         pointPoolGroup.transform.localRotation = Quaternion.identity;
         //~pjh
-        
+
         bUpdate = false;
     }
 
@@ -75,8 +75,8 @@ public class pointCloudTest : MonoBehaviour
         Application.targetFrameRate = 20;//int.Parse(CsCore.Configuration.ReadConfigIni("TargetFrameRate" , "Frame", "30"));
 
 
-        var  craneInfo = GetComponent<CraneInfo>();
-        for(int i =0; i < craneInfo.keys.Count; i++)
+        var craneInfo = GetComponent<CraneInfo>();
+        for (int i = 0; i < craneInfo.keys.Count; i++)
         {
             manager.Add(new PointManager(craneInfo.craneGameObject[i].GetComponent<CraneParts>()));
         }
@@ -84,7 +84,7 @@ public class pointCloudTest : MonoBehaviour
 
         for (int i = 0; i < manager.Count; i++)
         {
-            for(int j = 0; j< poolSize; j++)
+            for (int j = 0; j < poolSize; j++)
             {
                 PointManager pointManager = manager[i];
                 Mesh mesh = new Mesh();
@@ -102,12 +102,12 @@ public class pointCloudTest : MonoBehaviour
         }
         StartCoroutine(UpdateCoroutine());
     }
-    
+
     public void UpdatePoints(int pier, int crane, uint _numPoints, Vector3[] _vertices, Color[] _colors, int[] _indices)
     {
         foreach (PointManager mgr in manager)
         {
-            if(mgr.pier == pier && mgr.crane == crane)
+            if (mgr.pier == pier && mgr.crane == crane)
             {
                 mgr.UpdatePoints(_numPoints, _vertices, _colors, _indices);
                 break;
@@ -118,7 +118,7 @@ public class pointCloudTest : MonoBehaviour
     //pjh
     IEnumerator UpdateCoroutine()
     {
-        while(true)
+        while (true)
         {
             textPointSize = CsCore.Configuration.ReadConfigIni("PointSize", "Value");
             float.TryParse(textPointSize, out pointSize);
@@ -137,7 +137,7 @@ public class pointCloudTest : MonoBehaviour
 
                     try
                     {
-                        if(points.Length != colors.Length)continue;//pjh
+                        if (points.Length != colors.Length) continue;//pjh
 
                         GameObject pointFrame = pointManager.pointGroupsPool.Dequeue();
 
@@ -158,7 +158,7 @@ public class pointCloudTest : MonoBehaviour
                         //
 
                         // CES
-                        if (pointManager.group != null )
+                        if (pointManager.group != null)
                             pointFrame.transform.SetParent(pointManager.group.transform);
 
                         pointManager.pointGroups.Enqueue(pointFrame);
@@ -177,71 +177,13 @@ public class pointCloudTest : MonoBehaviour
                             pointManager.pointGroupsPool.Enqueue(pointFrame);
                         }
                     }
-                    catch(System.InvalidOperationException e)
+                    catch (System.InvalidOperationException e)
                     {
                         Debug.Log(e.ToString());
                     }
                 }
             }
             yield return wait;
-        }   
+        }
     }
-
-    // private float updateTime = 0;
-    // void Update()
-    // {
-    //     if(updateTime + 5 < UnityEngine.Time.time)
-    //     {
-    //         textPointSize = CsCore.Configuration.ReadConfigIni("PointSize", "Value");
-    //         float.TryParse(textPointSize, out pointSize);
-    //         updateTime = UnityEngine.Time.time;
-    //     }
-
-    //     for (int i = 0; i < manager.Count; i++)
-    //     {
-    //         PointManager pointManager = manager[i];
-    //         if (pointManager.IsUpdated())
-    //         {
-    //             pointManager.ResetUpdatd();
-
-    //             try
-    //             {
-    //                 if(pointManager.points.Length != pointManager.colors.Length)continue;//pjh
-                    
-    //                 GameObject pointFrame = pointManager.pointGroupsPool.Dequeue();
-
-    //                 matVertex.SetFloat("_PointSize", pointSize);
-    //                 pointFrame.SetActive(true);
-
-    //                 Mesh mesh = pointFrame.GetComponent<MeshFilter>().mesh;
-    //                 mesh.Clear();
-    //                 mesh.vertices = pointManager.points;
-    //                 if(pointManager.colors.Length != mesh.vertices.Length) continue; //pjh
-    //                 mesh.colors = pointManager.colors;
-    //                 mesh.SetIndices(pointManager.indices, MeshTopology.Points, 0);
-    //                 pointFrame.GetComponent<MeshFilter>().mesh = mesh;
-    //                 pointFrame.transform.SetParent(pointManager.pointGroup.transform);
-    //                 //pjh
-    //                 pointFrame.transform.localPosition = Vector3.zero;
-    //                 pointFrame.transform.localRotation = Quaternion.identity;
-    //                 pointFrame.transform.localScale = Vector3.one;
-    //                 //
-    //                 pointManager.pointGroups.Enqueue(pointFrame);
-
-    //                 while (pointManager.pointGroups.Count > queueSize)
-    //                 {
-    //                     GameObject gameObject = pointManager.pointGroups.Dequeue();
-    //                     gameObject.transform.SetParent(pointManager.pointPoolGroup.transform);
-    //                     gameObject.SetActive(false);
-    //                     pointManager.pointGroupsPool.Enqueue(pointFrame);
-    //                 }
-    //             }
-    //             catch(System.InvalidOperationException e)
-    //             {
-    //                 Debug.Log(e.ToString());
-    //             }
-    //         }
-    //     }
-    // }
-    //~pjh
 }
