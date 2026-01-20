@@ -273,15 +273,26 @@ public class CraneParts : MonoBehaviour
     {
         Vector3 currentUnity = ReferenceGPSToUnity(currentGPS);
 
-        // 현재 GPS와 시작 GPS 사이의 거리 계산
-        float currentDistance = Vector3.Distance(startUnity, currentUnity);
+        // [수정 전] 단순 거리 계산 (회전하거나 좌우로 튀면 값이 커져서 크레인이 앞으로 밀림)
+        // float currentDistance = Vector3.Distance(startUnity, currentUnity);
 
-        // 비율 계산
-        double ratio = currentDistance / totalDistance;
-        //Debug.Log(currentDistance + " / " + totalDistance);
-        // 비율이 0~1 범위에 있도록 클램- .5f프
+        // [수정 후] 벡터 투영 (Projection) 방식 사용
+        // 레일의 방향 벡터 (시작점 -> 끝점)
+        Vector3 railVector = endUnity - startUnity;
+
+        // 시작점에서 현재 위치까지의 벡터
+        Vector3 currentVector = currentUnity - startUnity;
+
+        // currentVector를 railVector 방향으로 투영(Dot Product)하여 레일 상의 진행 거리만 추출
+        // railVector.normalized는 방향만 가진 단위 벡터입니다.
+        // Dot 연산은 횡방향(좌우) 움직임을 무시하고 진행 방향 성분만 남깁니다.
+        float projectedDistance = Vector3.Dot(currentVector, railVector.normalized);
+
+        // 전체 길이 대비 진행 거리 비율 계산
+        double ratio = projectedDistance / totalDistance;
+
+        // 비율이 0~1 범위에 있도록 클램프
         float clampValue = Mathf.Clamp((float)ratio, clampMin, clampMax);
-        //Debug.Log(totalDistance + " / "+ currentDistance + " / "+ ratio);
 
         return clampValue;
     }
