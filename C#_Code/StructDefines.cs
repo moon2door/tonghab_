@@ -585,13 +585,15 @@ namespace StructDefines
             LOGPLAY_START = 1,
             LOGPLAY_PAUSE = 2,
             LOGPLAY_READY = 3,
-            LOGPLAY_CLOSE = 4
+            LOGPLAY_CLOSE = 4,
+            LOGPLAY_SPEED = 5
         };
 
         public const uint messageId = 17;
         public uint pier;
         public int code;
         public DateTime playDay;
+        public float speed;
 
         public int ToBytes(ref byte[] byteArray)
         {
@@ -618,6 +620,10 @@ namespace StructDefines
             Array.Copy(_sec, 0, byteArray, pos, _sec.Length); pos += _sec.Length;
 
             Debug.Log(string.Format("Request Log Data {0}-{1}-{2} {3}:{4} {5}", playDay.Year, playDay.Month, playDay.Day, playDay.Hour, playDay.Minute, playDay.Second));
+
+            byte[] _speed = BitConverter.GetBytes(speed);
+            Array.Copy(_speed, 0, byteArray, pos, _speed.Length); pos += _speed.Length;
+
             return pos;
         }
     }

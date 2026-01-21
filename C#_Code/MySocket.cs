@@ -218,6 +218,11 @@ public class MySocket : MonoBehaviour
                     curHook3 = hookPos3[key];
                 }
 
+                if (menu.craneVisibility.ContainsKey(key) && menu.craneVisibility[key] == false)
+                {
+                    currentPos = new Vector3(999, 999, 999);
+                }
+
                 // PHJ
                 if (parts.pierCode == 8)
                 {

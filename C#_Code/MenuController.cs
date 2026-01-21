@@ -82,6 +82,15 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
     public string loginName = "user";
     public string loginReserved = "";
 
+    [Header("[배속 조절]")]
+    public Button btnSpeedUp;  
+    public Button btnSpeedDown; 
+    public Text textSpeed;
+
+    private float currentSpeed = 1.0f;
+
+    public Dictionary<int, bool> craneVisibility = new Dictionary<int, bool>();
+
     // Start is called before the first frame update
     void Start()
     {
@@ -97,6 +106,14 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
         trigger.triggers.Add(entryPointerDown);
         
         datePicker.AddCallback(OnDatePicked);
+
+        foreach (int key in craneInfo.keys)
+        {
+            if (!craneVisibility.ContainsKey(key))
+            {
+                craneVisibility.Add(key, true);
+            }
+        }
 
         toggleStatus.onValueChanged.AddListener(delegate
         {
@@ -158,6 +175,22 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
             strComment.Add(key, string.Empty);
             textColors.Add(key, Color.black);
         }
+
+        if (btnSpeedUp != null)
+        {
+            btnSpeedUp.onClick.AddListener(delegate {
+                ChangeSpeed(0.1f);
+            });
+        }
+
+        if (btnSpeedDown != null)
+        {
+            btnSpeedDown.onClick.AddListener(delegate {
+                ChangeSpeed(-0.1f);
+            });
+        }
+
+        UpdateSpeedText(); // 초기 텍스트 표시
     }
 
     // Update is called once per frame
@@ -295,6 +328,13 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
                     GameObject gameObjectCrane = menu.transform.GetChild(i).Find("Crane").gameObject;
                     GameObject gameObjectStatus = menu.transform.GetChild(i).Find("Status").gameObject;
                     GameObject gameObjectDistance = menu.transform.GetChild(i).Find("Distance").gameObject;
+                    Transform trCheckbox = menu.transform.GetChild(i).Find("Checkbox");
+
+                    if (trCheckbox != null)
+                    {
+                        GameObject gameObjectCheckbox = trCheckbox.gameObject;
+                        Toggle toggle = gameObjectCheckbox.GetComponent<Toggle>();
+                    }
 
                     Text textCrane = gameObjectCrane.GetComponent<Text>();
                     Text textStatus = gameObjectStatus.GetComponent<Text>();
@@ -335,7 +375,43 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
                     GameObject gameObjectComment = menu.transform.GetChild(i).Find("Comment").gameObject;
                     Text textComment = gameObjectComment.GetComponent<Text>();
                     textComment.text = string.Empty;
+                    Transform trCheckbox = menu.transform.GetChild(i).Find("Checkbox");
                     int index = selectionManager.dropdownCraneNum.Count > i - 1 ? selectionManager.dropdownCraneNum[i - 1] : -1;
+
+                    if (trCheckbox != null)
+                    {
+                        trCheckbox.gameObject.SetActive(index >= 0);
+
+                        if (index >= 0)
+                        {
+                            int craneKey = craneInfo.GetCraneKeycode(currentPier, index);
+
+                            Toggle toggle = trCheckbox.GetComponent<Toggle>();
+
+                            // 기존 리스너 제거
+                            toggle.onValueChanged.RemoveAllListeners();
+
+                            // 딕셔너리 값 반영
+                            if (craneVisibility.ContainsKey(craneKey))
+                            {
+                                toggle.isOn = craneVisibility[craneKey];
+                            }
+                            else
+                            {
+                                craneVisibility.Add(craneKey, true);
+                                toggle.isOn = true;
+                            }
+
+                            // 리스너 등록 (여기서도 craneKey 사용)
+                            toggle.onValueChanged.AddListener((bool isOn) => {
+                                if (craneVisibility.ContainsKey(craneKey))
+                                {
+                                    craneVisibility[craneKey] = isOn;
+                                }
+                            });
+                        }
+                    }
+
                     if (index < 0)
                         continue;
                     //Debug.Log("#####################" + craneInfo.dictCraneName[key] + " " + strComment[key]);
@@ -649,5 +725,32 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
         message.pier = (uint)selectionManager.currentPier;
         message.playDay = selectedTime;
         socketObject.SendRequestLogPlay(message);
+    }
+
+    private void ChangeSpeed(float delta)
+    {
+        currentSpeed += delta;
+
+        currentSpeed = (float)Math.Round(currentSpeed, 1);
+
+        if (currentSpeed < 0.1f) currentSpeed = 0.1f;
+
+        UpdateSpeedText();
+
+        StructDefines.StRequestLogPlay message = new StructDefines.StRequestLogPlay();
+        message.code = (int)StructDefines.StRequestLogPlay.AcceptCode.LOGPLAY_SPEED; // 구조체에 추가한 코드
+        message.pier = (uint)selectionManager.currentPier;
+        message.playDay = logtimeCur;
+        message.speed = currentSpeed; // 구조체에 추가한 speed 변수
+
+        socketObject.SendRequestLogPlay(message);
+    }
+
+    private void UpdateSpeedText()
+    {
+        if (textSpeed != null)
+        {
+            textSpeed.text = string.Format("x {0:0.0}", currentSpeed);
+        }
     }
 }
