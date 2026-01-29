@@ -9,7 +9,7 @@ public struct CraneColorMode
     {
         this.meshRendererList = meshRendererList;
         bFlickering = false;
-        bActive = true;
+        bActive = false;
         flickeringLevel = 0;
         originalColor = Color.black;
         if(meshRendererList.Count > 0)

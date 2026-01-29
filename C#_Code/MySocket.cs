@@ -4,7 +4,6 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System;
-
 using CraneKey = System.Int32;
 using System.IO;
 using System.Collections;
@@ -40,7 +39,6 @@ public class MySocket : MonoBehaviour
 
     //
     private byte[] bufferHead = new byte[20];
-    //private byte[] buffer = new byte[12000268];
     private byte[] buffer = new byte[6553600];
     private byte[] bufferSend = new byte[10240];
 
@@ -117,10 +115,6 @@ public class MySocket : MonoBehaviour
 
         pointManagerComponent = GetComponent<pointCloudTest>();
         distanceManager = GetComponent<DistanceManager>();
-
-        // Initialize version text
-        //Text versionText = GameObject.Find("TextVersion").GetComponent<Text>();
-        //versionText.text = "Version " + Application.version;
     }
 
     void OnApplicationQuit()
@@ -136,11 +130,11 @@ public class MySocket : MonoBehaviour
         }
 
         // Kill threads
-        threadConnection.Abort();
-        threadMessage.Abort();
+        if (threadConnection != null) threadConnection.Abort();
+        if (threadMessage != null) threadMessage.Abort();
 
         // Disconnect socket
-        if (clientSocket.Connected)
+        if (clientSocket != null && clientSocket.Connected)
         {
             clientSocket.Close();
         }
@@ -192,14 +186,12 @@ public class MySocket : MonoBehaviour
         foreach (var parts in cranes)
         {
             key = craneInfo.GetCraneKeycode(parts.pierCode, parts.craneCode);
-            parts.gameObject.SetActive(listUpdated[key]);
+            parts.gameObject.SetActive(true);
 
             if (parts.gameObject.activeSelf == true)
             {
-                // 1. 사용할 변수들을 미리 선언
                 Vector3 currentPos;
                 Vector3 currentRot;
-                // GC 크레인 등을 위해 필요한 다른 변수들도 여기서 복사 준비
                 Vector3 currentTrans;
                 Vector3 curHook1, curHook2, curHook3;
 
@@ -210,8 +202,6 @@ public class MySocket : MonoBehaviour
 
                     currentPos = position[key];
                     currentRot = rotation[key];
-
-                    // (GC 크레인 로직이 뒤에 있다면 이것들도 같이 복사해야 안전합니다)
                     currentTrans = translation[key];
                     curHook1 = hookPos1[key];
                     curHook2 = hookPos2[key];
@@ -220,21 +210,16 @@ public class MySocket : MonoBehaviour
 
                 if (menu.craneVisibility.ContainsKey(key) && menu.craneVisibility[key] == false)
                 {
-                    currentPos = new Vector3(999, 999, 999);
+                    currentPos = new Vector3(99999, 99999, 99999);
                 }
 
                 // PHJ
                 if (parts.pierCode == 8)
                 {
-                    // [수정] position[key] -> currentPos 로 변경
-                    // [수정] rotation[key] -> currentRot 로 변경
                     parts.SetPosition(Math.Abs(currentPos.x), Math.Abs(currentPos.y), -currentPos.z, -currentRot.x);
                 }
-                //
-
                 else
                 {
-                    // 여기 아래도 전부 currentPos, currentRot, currentTrans 등을 사용해야 합니다.
                     parts.transform.localPosition = currentPos + parts.cranePositionOffset;
 
                     if (parts.craneType == CraneParts.CraneType.LLC)
@@ -248,8 +233,6 @@ public class MySocket : MonoBehaviour
                     }
                     else if (parts.craneType == CraneParts.CraneType.GC)
                     {
-                        // translation[key] 대신 currentTrans 사용
-                        // hookPos1[key] 대신 curHook1 사용
                         parts.SetGCTowerTransform(new Vector3(0, currentTrans.y, 0), new Vector3(0, curHook1.y, 0),
                             new Vector3(curHook1.x, curHook1.y, curHook1.z),
                             new Vector3(curHook2.x, curHook2.y, curHook2.z),
@@ -274,18 +257,7 @@ public class MySocket : MonoBehaviour
 
     private void ThreadGetMessage()
     {
-        // [디버깅 추가] 로그 파일 경로 (실행 파일 옆 PacketLog.txt)
-        string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "PacketLog.txt");
-
-        // [디버깅 추가] 쓰레드 시작 시 로그 파일 초기화 (기존 내용 삭제)
-        try
-        {
-            File.WriteAllText(logPath, $"=== Packet Log Started at {DateTime.Now} ===\n");
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"로그 파일 생성 실패: {e.Message}");
-        }
+        // [수정] PacketLog 파일 생성 코드 삭제됨
 
         while (threadMessage.ThreadState == ThreadState.Background)
         {
@@ -306,50 +278,21 @@ public class MySocket : MonoBehaviour
                 if (!asyncResult.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(5)))
                 {
                     Debug.LogError("데이터를 읽는 동안 타임아웃이 발생했습니다.");
-                    // [디버깅] 타임아웃 기록
-                    try { File.AppendAllText(logPath, $"[TimeOut] {DateTime.Now}\n"); } catch { }
+                    // [수정] 로그 파일 기록 코드 삭제됨
                     continue;
                 }
                 int bytes = stream.EndRead(asyncResult);
                 if (bytes == 0)
                 {
                     Debug.LogError("서버와의 연결이 끊어졌습니다.");
-                    // [디버깅] 연결 끊김 기록
-                    try { File.AppendAllText(logPath, $"[Disconnected] {DateTime.Now}\n"); } catch { }
+                    // [수정] 로그 파일 기록 코드 삭제됨
                     continue;
                 }
-                //int bytes = stream.Read(bufferHead, 0, 12);
                 //~pjh
 
-                // ========================================================
-                // [디버깅 핵심 코드] 원본 헤더값을 파일에 기록
-                // ========================================================
-                string hex = BitConverter.ToString(bufferHead, 0, 12);
+                // [수정] 헥사 코드 분석 및 파일 기록(PacketLog) 부분 삭제됨
 
-                // 1. 기존 방식대로 해석 (Little Endian Int32)
-                int rawId = BitConverter.ToInt32(bufferHead, 0);
-                int rawPier = BitConverter.ToInt32(bufferHead, 4);
-                int rawCrane = BitConverter.ToInt32(bufferHead, 8);
-
-                // 2. 의심되는 패턴 확인 (3번째 바이트 읽기)
-                // [Pier: 2], [Crane: 6], [MsgID: 10] 인덱스
-                int bytePier = bufferHead[2];
-                int byteCrane = bufferHead[6];
-                int byteMsg = bufferHead[10];
-
-                string logLine = $"[RX] Hex: {hex} | " +
-                                 $"기존해석: ID({rawId}), P({rawPier}), C({rawCrane}) | " +
-                                 $"3번Byte: P({bytePier}), C({byteCrane}), ID({byteMsg})\n";
-
-                try
-                {
-                    File.AppendAllText(logPath, logLine);
-                }
-                catch { /* 파일 쓰기 충돌 방지용 무시 */ }
-                // ========================================================
-
-
-                // 기존 로직 유지 (파일 로그와 별개로 프로그램은 계속 돌아가게 둠)
+                // 기존 로직 유지
                 int messageId = BitConverter.ToInt32(bufferHead, 0);
                 int pierId = BitConverter.ToInt32(bufferHead, 4);
                 int craneId = BitConverter.ToInt32(bufferHead, 8);
@@ -367,8 +310,6 @@ public class MySocket : MonoBehaviour
                 }
                 if (bSocketPierType == true)
                 {
-                    //Debug.Log("OnMessage[" + pierId + "," + craneId + "] " + messageId);
-
                     if (messageId == 0) // Read Point Cloud
                     {
                         bytes = stream.Read(bufferHead, 12, 4 + 4);

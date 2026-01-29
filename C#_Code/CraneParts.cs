@@ -149,7 +149,7 @@ public class CraneParts : MonoBehaviour
 
     public void SetCraneRotate(float rotate)
     {
-        Debug.Log(rotate);
+        //Debug.Log(rotate);
         // [수정] 회전값 저장
         currentAzimuth = rotate;
 

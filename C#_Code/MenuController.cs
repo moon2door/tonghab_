@@ -83,9 +83,12 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
     public string loginReserved = "";
 
     [Header("[배속 조절]")]
-    public Button btnSpeedUp;  
-    public Button btnSpeedDown; 
-    public Text textSpeed;
+    public Button btnSpeed1;  // 1배속 버튼
+    public Button btnSpeed2;  // 2배속 버튼
+    public Button btnSpeed4;  // 4배속 버튼
+    public Button btnSpeed10; // 10배속 버튼
+    public Button btnSpeed50; // 50배속 버튼
+    public Text textSpeed;    // 현재 배속 표시용 텍스트
 
     private float currentSpeed = 1.0f;
 
@@ -111,7 +114,8 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
         {
             if (!craneVisibility.ContainsKey(key))
             {
-                craneVisibility.Add(key, true);
+                int savedValue = PlayerPrefs.GetInt("CraneVis_" + key, 1);
+                craneVisibility.Add(key, savedValue == 1);
             }
         }
 
@@ -176,18 +180,28 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
             textColors.Add(key, Color.black);
         }
 
-        if (btnSpeedUp != null)
+        if (btnSpeed1 != null)
         {
-            btnSpeedUp.onClick.AddListener(delegate {
-                ChangeSpeed(0.1f);
-            });
+            btnSpeed1.onClick.AddListener(delegate { SetSpeed(1.0f); });
         }
 
-        if (btnSpeedDown != null)
+        if (btnSpeed2 != null)
         {
-            btnSpeedDown.onClick.AddListener(delegate {
-                ChangeSpeed(-0.1f);
-            });
+            btnSpeed2.onClick.AddListener(delegate { SetSpeed(2.0f); });
+        }
+
+        if (btnSpeed4 != null)
+        {
+            btnSpeed4.onClick.AddListener(delegate { SetSpeed(4.0f); });
+        }
+
+        if (btnSpeed10 != null)
+        {
+            btnSpeed10.onClick.AddListener(delegate { SetSpeed(10.0f); });
+        }
+        if (btnSpeed50 != null)
+        {
+            btnSpeed50.onClick.AddListener(delegate { SetSpeed(50.0f); });
         }
 
         UpdateSpeedText(); // 초기 텍스트 표시
@@ -380,9 +394,10 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
 
                     if (trCheckbox != null)
                     {
-                        trCheckbox.gameObject.SetActive(index >= 0);
+                        bool showCheckbox = (index >= 0) && (loginID != "user");
+                        trCheckbox.gameObject.SetActive(showCheckbox);
 
-                        if (index >= 0)
+                        if (showCheckbox)
                         {
                             int craneKey = craneInfo.GetCraneKeycode(currentPier, index);
 
@@ -407,6 +422,9 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
                                 if (craneVisibility.ContainsKey(craneKey))
                                 {
                                     craneVisibility[craneKey] = isOn;
+
+                                    PlayerPrefs.SetInt("CraneVis_" + craneKey, isOn ? 1 : 0);
+                                    PlayerPrefs.Save();
                                 }
                             });
                         }
@@ -466,6 +484,8 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
         {
             panelLogin.SetActive(!panelLogin.activeSelf);
         }
+
+        bUpdateStatusInfo = true;
     }
 
     public void OnReplyLoginAdmin()
@@ -532,6 +552,7 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
             loginReserved = "";
 
             bAdminAuthorized = false;
+            bUpdateStatusInfo = true;
         }
         else if (repMessage.code == 2)
         {
@@ -543,6 +564,7 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
             loginReserved = "";
 
             bAdminAuthorized = true;
+            bUpdateStatusInfo = true;
         }
         else
         {
@@ -622,15 +644,18 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
     }
     public void OnButtonPlayLog()
     {
-        if(2020 < logtimeCur.Year)
+        if (2020 < logtimeCur.Year)
         {
             StructDefines.StRequestLogPlay message = new StructDefines.StRequestLogPlay();
             message.code = (int)StructDefines.StRequestLogPlay.AcceptCode.LOGPLAY_START;
             message.pier = (uint)selectionManager.currentPier;
             message.playDay = logtimeCur;
+
+            // [추가] 현재 설정된 배속을 함께 보냄
+            message.speed = currentSpeed;
+
             socketObject.SendRequestLogPlay(message);
 
-            //panelLoading.gameObject.SetActive(true);
             SetLoadingPanel(true);
         }
     }
@@ -695,16 +720,19 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
         TimeSpan dt = new TimeSpan(0, 0, value);
         DateTime selectedTime = new DateTime(logtimeStart.Year, logtimeStart.Month, logtimeStart.Day, 0, 0, 0);
         selectedTime += dt;
-        
+
         if (selectedTime.Year > 2020)
         {
             StructDefines.StRequestLogPlay message = new StructDefines.StRequestLogPlay();
             message.code = (int)StructDefines.StRequestLogPlay.AcceptCode.LOGPLAY_START;
             message.pier = (uint)selectionManager.currentPier;
             message.playDay = selectedTime;
+
+            // [추가] 현재 설정된 배속을 함께 보냄
+            message.speed = currentSpeed;
+
             socketObject.SendRequestLogPlay(message);
 
-            //panelLoading.gameObject.SetActive(true);
             SetLoadingPanel(true);
         }
         else
@@ -727,23 +755,23 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
         socketObject.SendRequestLogPlay(message);
     }
 
-    private void ChangeSpeed(float delta)
+    private void SetSpeed(float targetSpeed)
     {
-        currentSpeed += delta;
-
-        currentSpeed = (float)Math.Round(currentSpeed, 1);
-
-        if (currentSpeed < 0.1f) currentSpeed = 0.1f;
+        currentSpeed = targetSpeed;
 
         UpdateSpeedText();
 
-        StructDefines.StRequestLogPlay message = new StructDefines.StRequestLogPlay();
-        message.code = (int)StructDefines.StRequestLogPlay.AcceptCode.LOGPLAY_SPEED; // 구조체에 추가한 코드
-        message.pier = (uint)selectionManager.currentPier;
-        message.playDay = logtimeCur;
-        message.speed = currentSpeed; // 구조체에 추가한 speed 변수
+        // 서버에 현재 재생 시간과 변경된 속도를 포함하여 LOGPLAY_START 패킷 전송
+        if (logtimeCur.Year > 2020) // 로그 재생 데이터가 유효할 때만 전송
+        {
+            StructDefines.StRequestLogPlay message = new StructDefines.StRequestLogPlay();
+            message.code = (int)StructDefines.StRequestLogPlay.AcceptCode.LOGPLAY_START;
+            message.pier = (uint)selectionManager.currentPier;
+            message.playDay = logtimeCur; // 현재 재생 시점 유지
+            message.speed = currentSpeed; // 변경된 속도 적용
 
-        socketObject.SendRequestLogPlay(message);
+            socketObject.SendRequestLogPlay(message);
+        }
     }
 
     private void UpdateSpeedText()
