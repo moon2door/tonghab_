@@ -59,7 +59,6 @@ public class PointManager
     public Queue<GameObject> pointGroups = new Queue<GameObject>();
     public Queue<GameObject> pointGroupsPool = new Queue<GameObject>();
 }
-
 public class pointCloudTest : MonoBehaviour
 {
     public Material matVertex;
@@ -69,6 +68,7 @@ public class pointCloudTest : MonoBehaviour
     private string textPointSize = "";
     private float pointSize = 0.3f;
 
+    private Collider inscCollider;
 
     void Start()
     {
@@ -79,11 +79,7 @@ public class pointCloudTest : MonoBehaviour
         var craneInfo = GetComponent<CraneInfo>();
         for (int i = 0; i < craneInfo.keys.Count; i++)
         {
-            CraneParts parts = craneInfo.craneGameObject[i].GetComponent<CraneParts>();
-            manager.Add(new PointManager(parts));
-
-            // [추가] 크레인 레일 고정 기능을 포인트 클라우드에도 적용 (+ 상세 디버그 로그)
-            ApplyRailConstraintToCloud(parts);
+            manager.Add(new PointManager(craneInfo.craneGameObject[i].GetComponent<CraneParts>()));
         }
         //~pjh
 
@@ -108,56 +104,6 @@ public class pointCloudTest : MonoBehaviour
         StartCoroutine(UpdateCoroutine());
     }
 
-    void ApplyRailConstraintToCloud(CraneParts parts)
-    {
-        string craneName = parts.gameObject.name;
-
-        // 1. 크레인 본체 확인
-        CraneRailConstraint parentConstraint = parts.GetComponent<CraneRailConstraint>();
-        if (parentConstraint == null) return;
-        if (parentConstraint.railStart == null || parentConstraint.railEnd == null) return;
-
-        // 2. 포인트 클라우드 타겟 오브젝트 확인
-        if (parts.pointCloudTransform == null)
-        {
-            Debug.LogError($"[오류] '{craneName}'의 pointCloudTransform이 비어있습니다 (Null)!");
-            return;
-        }
-
-        GameObject cloudObject = parts.pointCloudTransform.gameObject;
-
-        // [중요] 타겟이 씬에 존재하는 진짜 오브젝트인지 확인
-        if (!cloudObject.scene.IsValid())
-        {
-            Debug.LogError($"[치명적 오류] '{craneName}'에 연결된 pointCloudTransform은 씬에 있는 오브젝트가 아닙니다! 프리팹(에셋)이 연결된 것 같습니다. 인스펙터를 확인하세요.");
-            return;
-        }
-
-        // 3. 컴포넌트 부착
-        CraneRailConstraint childConstraint = cloudObject.GetComponent<CraneRailConstraint>();
-        bool isNew = false;
-        if (childConstraint == null)
-        {
-            childConstraint = cloudObject.AddComponent<CraneRailConstraint>();
-            isNew = true;
-        }
-
-        // 4. 설정 복사
-        childConstraint.railStart = parentConstraint.railStart;
-        childConstraint.railEnd = parentConstraint.railEnd;
-        childConstraint.fixPosition = true;
-
-        // [핵심] 범인 색출: 이름을 강제로 바꿔서 하이어라키에서 눈에 띄게 만듦
-        string originalName = cloudObject.name;
-        if (!originalName.Contains("[AutoAttached]"))
-        {
-            cloudObject.name = $"{originalName} [AutoAttached]";
-        }
-
-        Debug.Log($"[성공] '{craneName}' -> 타겟오브젝트: '{cloudObject.name}' 에 스크립트 부착 완료.\n" +
-                  $">> 하이어라키에서 이름이 바뀐 오브젝트('{cloudObject.name}')를 찾아보세요!");
-    }
-
     public void UpdatePoints(int pier, int crane, uint _numPoints, Vector3[] _vertices, Color[] _colors, int[] _indices)
     {
         foreach (PointManager mgr in manager)
@@ -169,9 +115,7 @@ public class pointCloudTest : MonoBehaviour
             }
         }
     }
-
     readonly WaitForSecondsRealtime wait = new WaitForSecondsRealtime(1);
-
     //pjh
     IEnumerator UpdateCoroutine()
     {
@@ -179,6 +123,16 @@ public class pointCloudTest : MonoBehaviour
         {
             textPointSize = CsCore.Configuration.ReadConfigIni("PointSize", "Value");
             float.TryParse(textPointSize, out pointSize);
+
+            // [추가] Insc 태그를 가진 오브젝트의 콜라이더 찾기 (캐싱)
+            if (inscCollider == null)
+            {
+                GameObject obj = GameObject.FindGameObjectWithTag("Insc");
+                if (obj != null)
+                {
+                    inscCollider = obj.GetComponent<Collider>();
+                }
+            }
 
             for (int i = 0; i < manager.Count; i++)
             {
@@ -188,7 +142,7 @@ public class pointCloudTest : MonoBehaviour
                     //pjh
                     var points = pointManager.points;
                     var colors = pointManager.colors;
-                    var indices = pointManager.indices;
+                    // var indices = pointManager.indices; // [수정] 필터링된 인덱스를 새로 생성하므로 기존 인덱스는 사용하지 않음
                     //~pjh
                     pointManager.ResetUpdatd();
 
@@ -201,11 +155,55 @@ public class pointCloudTest : MonoBehaviour
                         matVertex.SetFloat("_PointSize", pointSize);
                         pointFrame.SetActive(true);
 
+                        // [추가] 포인트 필터링 로직 시작
+                        List<Vector3> validPoints = new List<Vector3>(points.Length);
+                        List<Color> validColors = new List<Color>(colors.Length);
+                        List<int> validIndices = new List<int>(points.Length);
+
+                        if (inscCollider != null && pointManager.pointGroup != null)
+                        {
+                            // 포인트들이 로컬 좌표계(pointManager.pointGroup 기준)에 있으므로 변환을 위해 Transform 가져오기
+                            Transform originTr = pointManager.pointGroup.transform;
+
+                            for (int k = 0; k < points.Length; k++)
+                            {
+                                Vector3 pt = points[k];
+                                // 로컬 좌표 -> 월드 좌표 변환
+                                Vector3 worldPt = originTr.TransformPoint(pt);
+
+                                // 1차: AABB(경계 상자) 검사 (빠른 성능)
+                                if (inscCollider.bounds.Contains(worldPt))
+                                {
+                                    // 2차: 정밀 검사 (포인트가 콜라이더 내부 혹은 표면에 있으면 제외)
+                                    if (inscCollider.ClosestPoint(worldPt) == worldPt)
+                                    {
+                                        continue; // 렌더링 리스트에 추가하지 않음
+                                    }
+                                }
+
+                                // 유효한 포인트만 리스트에 추가
+                                validPoints.Add(pt);
+                                validColors.Add(colors[k]);
+                                validIndices.Add(validIndices.Count); // 0부터 순차적으로 인덱스 생성
+                            }
+                        }
+                        else
+                        {
+                            // 콜라이더가 없거나 기준 Transform이 없으면 원본 그대로 사용
+                            validPoints.AddRange(points);
+                            validColors.AddRange(colors);
+                            for (int k = 0; k < points.Length; k++) validIndices.Add(k);
+                        }
+                        // [추가] 포인트 필터링 로직 끝
+
                         Mesh mesh = pointFrame.GetComponent<MeshFilter>().mesh;
                         mesh.Clear();
-                        mesh.vertices = points;//pjh
-                        mesh.colors = colors;//pjh
-                        mesh.SetIndices(indices, MeshTopology.Points, 0);//pjh
+
+                        // [수정] 필터링된 리스트를 배열로 변환하여 적용
+                        mesh.vertices = validPoints.ToArray();
+                        mesh.colors = validColors.ToArray();
+                        mesh.SetIndices(validIndices.ToArray(), MeshTopology.Points, 0);
+
                         pointFrame.GetComponent<MeshFilter>().mesh = mesh;
                         pointFrame.transform.SetParent(pointManager.pointGroup.transform);
                         //pjh
