@@ -5,10 +5,14 @@ using System.IO;
 
 public class PointManager
 {
+    public CraneRailConstraint railConstraint;
+
     public PointManager(CraneParts parts)//pjh
     {
         this.pier = parts.pierCode;
         this.crane = parts.craneCode;
+
+        this.railConstraint = parts.GetComponent<CraneRailConstraint>();
 
         group = GameObject.Find("pointCloudGroups");
         pointPoolGroup = new GameObject(parts.craneName + "pool");
@@ -211,6 +215,27 @@ public class pointCloudTest : MonoBehaviour
                         pointFrame.transform.localRotation = Quaternion.identity;
                         pointFrame.transform.localScale = Vector3.one;
                         //
+
+                        // 1. 만약 레일 제약조건이 있고 활성화되어 있다면 보정 실행
+                        if (pointManager.railConstraint != null && pointManager.railConstraint.fixPosition
+                            && pointManager.railConstraint.railStart != null && pointManager.railConstraint.railEnd != null)
+                        {
+                            // 현재 크레인의 위치 (오차가 있을 수 있음)
+                            Vector3 currentCranePos = pointManager.railConstraint.transform.position;
+
+                            // 크레인이 가야 할 정확한 레일 위 위치 계산 (미리 계산)
+                            Vector3 correctCranePos = pointManager.railConstraint.GetProjectedPosition(
+                                pointManager.railConstraint.railStart.position,
+                                pointManager.railConstraint.railEnd.position,
+                                currentCranePos
+                            );
+
+                            // 오차 벡터 계산 (보정될 위치 - 현재 위치)
+                            Vector3 correctionDiff = correctCranePos - currentCranePos;
+
+                            // 포인트 클라우드도 그 오차만큼 미리 이동시킴
+                            pointFrame.transform.position += correctionDiff;
+                        }
 
                         // CES
                         if (pointManager.group != null)

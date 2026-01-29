@@ -8,19 +8,36 @@ public class CraneRailConstraint : MonoBehaviour
 
     [Header("Settings")]
     public bool fixPosition = true; // 켜고 끌 수 있는 옵션
-    
-    void LateUpdate()
+
+    public CraneWireControl cwc;
+
+    private void Start()
     {
-        if (!fixPosition || railStart == null || railEnd == null) return;
-
-        Vector3 currentPos = transform.position;
-
-        Vector3 correctedPos = GetProjectedPosition(railStart.position, railEnd.position, currentPos);
-
-        transform.position = correctedPos;
+        cwc = GetComponent<CraneWireControl>();
     }
 
-    private Vector3 GetProjectedPosition(Vector3 a, Vector3 b, Vector3 p)
+    void LateUpdate()
+    {
+        if (railStart == null || railEnd == null) return;
+
+        if (fixPosition)
+        {
+            Vector3 currentPos = transform.position;
+
+            Vector3 correctedPos = GetProjectedPosition(railStart.position, railEnd.position, currentPos);
+
+            correctedPos.y = currentPos.y;
+
+            transform.position = correctedPos;
+        }
+
+        if (cwc != null)
+        {
+            cwc.Wire__C();
+        }
+    }
+
+    public Vector3 GetProjectedPosition(Vector3 a, Vector3 b, Vector3 p)
     {
         Vector3 ab = b - a;
         Vector3 ap = p - a;
