@@ -6,6 +6,7 @@ using System.IO;
 public class PointManager
 {
     public CraneRailConstraint railConstraint;
+    public CranePointConstraint pointConstraint; // [추가] 포인트 고정 스크립트 참조
 
     public PointManager(CraneParts parts)//pjh
     {
@@ -13,6 +14,7 @@ public class PointManager
         this.crane = parts.craneCode;
 
         this.railConstraint = parts.GetComponent<CraneRailConstraint>();
+        this.pointConstraint = parts.GetComponent<CranePointConstraint>(); // [추가] 컴포넌트 가져오기
 
         group = GameObject.Find("pointCloudGroups");
         pointPoolGroup = new GameObject(parts.craneName + "pool");
@@ -63,6 +65,7 @@ public class PointManager
     public Queue<GameObject> pointGroups = new Queue<GameObject>();
     public Queue<GameObject> pointGroupsPool = new Queue<GameObject>();
 }
+
 public class pointCloudTest : MonoBehaviour
 {
     public Material matVertex;
@@ -146,7 +149,7 @@ public class pointCloudTest : MonoBehaviour
                     //pjh
                     var points = pointManager.points;
                     var colors = pointManager.colors;
-                    // var indices = pointManager.indices; // [수정] 필터링된 인덱스를 새로 생성하므로 기존 인덱스는 사용하지 않음
+                    // var indices = pointManager.indices; 
                     //~pjh
                     pointManager.ResetUpdatd();
 
@@ -216,26 +219,38 @@ public class pointCloudTest : MonoBehaviour
                         pointFrame.transform.localScale = Vector3.one;
                         //
 
-                        // 1. 만약 레일 제약조건이 있고 활성화되어 있다면 보정 실행
+                        // ==================================================================================
+                        // [수정] 크레인 위치 보정 로직 (RailConstraint 및 PointConstraint 모두 처리)
+                        // ==================================================================================
+
+                        // 1. CraneRailConstraint (기존 LLC 로직)
                         if (pointManager.railConstraint != null && pointManager.railConstraint.fixPosition
                             && pointManager.railConstraint.railStart != null && pointManager.railConstraint.railEnd != null)
                         {
-                            // 현재 크레인의 위치 (오차가 있을 수 있음)
                             Vector3 currentCranePos = pointManager.railConstraint.transform.position;
-
-                            // 크레인이 가야 할 정확한 레일 위 위치 계산 (미리 계산)
                             Vector3 correctCranePos = pointManager.railConstraint.GetProjectedPosition(
                                 pointManager.railConstraint.railStart.position,
                                 pointManager.railConstraint.railEnd.position,
                                 currentCranePos
                             );
-
-                            // 오차 벡터 계산 (보정될 위치 - 현재 위치)
                             Vector3 correctionDiff = correctCranePos - currentCranePos;
-
-                            // 포인트 클라우드도 그 오차만큼 미리 이동시킴
                             pointFrame.transform.position += correctionDiff;
                         }
+                        // 2. CranePointConstraint (새로운 TC/JIB 로직) [추가됨]
+                        else if (pointManager.pointConstraint != null && pointManager.pointConstraint.fixPosition
+                                 && pointManager.pointConstraint.IsLocked)
+                        {
+                            // 현재 크레인 위치(미세한 오차 포함 가능성)
+                            Vector3 currentCranePos = pointManager.pointConstraint.transform.position;
+
+                            // 보정된 완벽한 위치 (Locked Position)
+                            Vector3 correctCranePos = pointManager.pointConstraint.GetLockedPosition();
+
+                            // 오차만큼 포인트 클라우드 위치 보정
+                            Vector3 correctionDiff = correctCranePos - currentCranePos;
+                            pointFrame.transform.position += correctionDiff;
+                        }
+                        // ==================================================================================
 
                         // CES
                         if (pointManager.group != null)
