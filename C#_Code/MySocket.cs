@@ -50,24 +50,7 @@ public class MySocket : MonoBehaviour
 
     private object _lock = new object(); // 자물쇠 추가
 
-    // 크레인 Lerp 이동 변수 시작 //
-    struct CraneState
-    {
-        public Vector3 position;
-        public Vector3 rotation;
-        public Vector3 translation;
-        public Vector3 hook1;
-        public Vector3 hook2;
-        public Vector3 hook3;
-    }
-
-    private Dictionary<CraneKey, CraneState> lerpFrom = new Dictionary<CraneKey, CraneState>(); // 출발 지점
-    private Dictionary<CraneKey, CraneState> lerpTo = new Dictionary<CraneKey, CraneState>();   // 도착 지점
-    private Dictionary<CraneKey, float> lerpTimer = new Dictionary<CraneKey, float>();          // 타이머
-
-    public float smoothTime = 1.0f;
-    // 크레인 Lerp 이동 변수 끝 //
-
+    // Start is called before the first frame update
     void Start()
     {
         craneInfo = GetComponent<CraneInfo>();
@@ -196,139 +179,86 @@ public class MySocket : MonoBehaviour
         UpdateModels();
     }
 
+    //pjh
     private void UpdateModels()
     {
         int key = 0;
         foreach (var parts in cranes)
         {
             key = craneInfo.GetCraneKeycode(parts.pierCode, parts.craneCode);
+            parts.gameObject.SetActive(true);
 
-            bool isVisible = true;
-            if (menu.craneVisibility.ContainsKey(key) && menu.craneVisibility[key] == false)
+            if (parts.gameObject.activeSelf == true)
             {
-                isVisible = false;
-            }
-            parts.gameObject.SetActive(isVisible);
-            if (!isVisible) continue;
+                Vector3 currentPos;
+                Vector3 currentRot;
+                Vector3 currentTrans;
+                Vector3 curHook1, curHook2, curHook3;
 
-
-            bool isNewDataArrived = false;
-            CraneState incomingState = new CraneState();
-
-            lock (_lock)
-            {
-                if (listUpdated.ContainsKey(key) && listUpdated[key])
+                // 2. 자물쇠를 걸고 '한 번에' 복사 (스냅샷 뜨기)
+                lock (_lock)
                 {
-                    isNewDataArrived = true;
-                    listUpdated[key] = false; 
+                    if (position[key] == Vector3.zero) continue;
 
-                    incomingState.position = position[key];
-                    incomingState.rotation = rotation[key];
-                    incomingState.translation = translation[key];
-                    incomingState.hook1 = hookPos1[key];
-                    incomingState.hook2 = hookPos2[key];
-                    incomingState.hook3 = hookPos3[key];
+                    currentPos = position[key];
+                    currentRot = rotation[key];
+                    currentTrans = translation[key];
+                    curHook1 = hookPos1[key];
+                    curHook2 = hookPos2[key];
+                    curHook3 = hookPos3[key];
                 }
-            }
 
-            if (!lerpTo.ContainsKey(key))
-            {
-                if (isNewDataArrived)
+                if (menu.craneVisibility.ContainsKey(key) && menu.craneVisibility[key] == false)
                 {
-                    lerpTo[key] = incomingState;
-                    lerpFrom[key] = incomingState; 
-                    lerpTimer[key] = 0f;
+                    currentPos = new Vector3(99999, 99999, 99999);
                 }
-            }
-            else
-            {
-                if (isNewDataArrived)
+
+                // PHJ
+                if (parts.pierCode == 8)
                 {
-                    CraneState currentVisualState = CalculateLerpState(key);
-
-                    lerpFrom[key] = currentVisualState; 
-                    lerpTo[key] = incomingState;
-                    lerpTimer[key] = 0f;               
-                }
-            }
-
-            if (!lerpTo.ContainsKey(key)) continue;
-
-            lerpTimer[key] += Time.deltaTime;
-            CraneState finalState = CalculateLerpState(key); 
-
-
-            Vector3 currentPos = finalState.position;
-            Vector3 currentRot = finalState.rotation;
-            Vector3 currentTrans = finalState.translation;
-            Vector3 curHook1 = finalState.hook1;
-            Vector3 curHook2 = finalState.hook2;
-            Vector3 curHook3 = finalState.hook3;
-
-            // PHJ (기존 코드 유지)
-            if (parts.pierCode == 8)
-            {
-                parts.SetPosition(Math.Abs(currentPos.x), Math.Abs(currentPos.y), -currentPos.z, -currentRot.x);
-            }
-            else
-            {
-                parts.transform.localPosition = currentPos + parts.cranePositionOffset;
-
-                if (parts.craneType == CraneParts.CraneType.LLC)
-                {
-                    parts.SetJibAngle(-currentRot.x);
-                    parts.SetCraneRotate(-currentRot.z + 180);
-                }
-                else if (parts.craneType == CraneParts.CraneType.TC)
-                {
-                    parts.SetCraneRotate(-currentRot.z + 180);
-                }
-                else if (parts.craneType == CraneParts.CraneType.GC)
-                {
-                    parts.SetGCTowerTransform(new Vector3(0, currentTrans.y, 0), new Vector3(0, curHook1.y, 0),
-                        new Vector3(curHook1.x, curHook1.y, curHook1.z),
-                        new Vector3(curHook2.x, curHook2.y, curHook2.z),
-                        new Vector3(curHook3.x, curHook3.y, curHook3.z));
+                    parts.SetPosition(Math.Abs(currentPos.x), Math.Abs(currentPos.y), -currentPos.z, -currentRot.x);
                 }
                 else
                 {
-                    if (parts.pierCode == 2 && parts.craneCode == 3)
+                    parts.transform.localPosition = currentPos + parts.cranePositionOffset;
+
+                    if (parts.craneType == CraneParts.CraneType.LLC)
                     {
-                        GameObject.Find("k_ttc23_tower").transform.localRotation = Quaternion.AngleAxis(currentRot.z + 180 + 90 + -8.2f, new Vector3(0, 0, 1));
+                        parts.SetJibAngle(-currentRot.x);
+                        parts.SetCraneRotate(-currentRot.z + 180);
+                    }
+                    else if (parts.craneType == CraneParts.CraneType.TC)
+                    {
+                        parts.SetCraneRotate(-currentRot.z + 180);
+                    }
+                    else if (parts.craneType == CraneParts.CraneType.GC)
+                    {
+                        parts.SetGCTowerTransform(new Vector3(0, currentTrans.y, 0), new Vector3(0, curHook1.y, 0),
+                            new Vector3(curHook1.x, curHook1.y, curHook1.z),
+                            new Vector3(curHook2.x, curHook2.y, curHook2.z),
+                            new Vector3(curHook3.x, curHook3.y, curHook3.z));
                     }
                     else
                     {
-                        parts.SetCraneRotate(-currentRot.z + 180);
+                        if (parts.pierCode == 2 && parts.craneCode == 3)
+                        {
+                            GameObject.Find("k_ttc23_tower").transform.localRotation = Quaternion.AngleAxis(currentRot.z + 180 + 90 + -8.2f, new Vector3(0, 0, 1));
+                        }
+                        else
+                        {
+                            parts.SetCraneRotate(-currentRot.z + 180);
+                        }
                     }
                 }
             }
         }
     }
-
-    private CraneState CalculateLerpState(int key)
-    {
-        float t = Mathf.Clamp01(lerpTimer[key] / smoothTime);
-
-        CraneState from = lerpFrom[key];
-        CraneState to = lerpTo[key];
-        CraneState result = new CraneState();
-
-        result.position = Vector3.Lerp(from.position, to.position, t);
-
-        result.rotation.x = Mathf.LerpAngle(from.rotation.x, to.rotation.x, t);
-        result.rotation.y = Mathf.LerpAngle(from.rotation.y, to.rotation.y, t);
-        result.rotation.z = Mathf.LerpAngle(from.rotation.z, to.rotation.z, t);
-
-        result.translation = Vector3.Lerp(from.translation, to.translation, t);
-        result.hook1 = Vector3.Lerp(from.hook1, to.hook1, t);
-        result.hook2 = Vector3.Lerp(from.hook2, to.hook2, t);
-        result.hook3 = Vector3.Lerp(from.hook3, to.hook3, t);
-
-        return result;
-    }
+    //~pjh
 
     private void ThreadGetMessage()
     {
+        // [수정] PacketLog 파일 생성 코드 삭제됨
+
         while (threadMessage.ThreadState == ThreadState.Background)
         {
             //pjh
@@ -348,15 +278,21 @@ public class MySocket : MonoBehaviour
                 if (!asyncResult.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(5)))
                 {
                     Debug.LogError("데이터를 읽는 동안 타임아웃이 발생했습니다.");
+                    // [수정] 로그 파일 기록 코드 삭제됨
                     continue;
                 }
                 int bytes = stream.EndRead(asyncResult);
                 if (bytes == 0)
                 {
                     Debug.LogError("서버와의 연결이 끊어졌습니다.");
+                    // [수정] 로그 파일 기록 코드 삭제됨
                     continue;
                 }
                 //~pjh
+
+                // [수정] 헥사 코드 분석 및 파일 기록(PacketLog) 부분 삭제됨
+
+                // 기존 로직 유지
                 int messageId = BitConverter.ToInt32(bufferHead, 0);
                 int pierId = BitConverter.ToInt32(bufferHead, 4);
                 int craneId = BitConverter.ToInt32(bufferHead, 8);
@@ -400,7 +336,7 @@ public class MySocket : MonoBehaviour
                         }
                         pointManagerComponent.UpdatePoints(pierId, craneId, numPoints, myPoints, myColors, indecies);
                     }
-                    else if (messageId == 1) 
+                    else if (messageId == 1) // Read crane attitude
                     {
                         int pos = 0;
                         int remained = 6 * 4 * 5;
@@ -411,34 +347,18 @@ public class MySocket : MonoBehaviour
                             remained -= nRead;
                         }
 
-                        float tempX = BitConverter.ToSingle(buffer, 0);
-                        float tempY = -BitConverter.ToSingle(buffer, 4);
-                        float tempZ = BitConverter.ToSingle(buffer, 8);
-
-                        float validRange = 5000.0f;
-
-                        bool isValidData = true;
-                        if (Mathf.Abs(tempX) > validRange || Mathf.Abs(tempY) > validRange || Mathf.Abs(tempZ) > validRange)
+                        lock (_lock) // 자물쇠 잠금
                         {
-                            isValidData = false;
-                            // Debug.LogWarning($"[MySocket] 비정상 좌표 감지됨 (무시함): {key}, Pos: {tempX}, {tempY}, {tempZ}");
+                            position[key] = new Vector3(BitConverter.ToSingle(buffer, 0), -BitConverter.ToSingle(buffer, 4), BitConverter.ToSingle(buffer, 8));
+                            rotation[key] = new Vector3(-BitConverter.ToSingle(buffer, 12), -BitConverter.ToSingle(buffer, 16), -BitConverter.ToSingle(buffer, 20));
+                            translation[key] = new Vector3(BitConverter.ToSingle(buffer, 24), BitConverter.ToSingle(buffer, 28), BitConverter.ToSingle(buffer, 32));
+
+                            hookPos1[key] = new Vector3(BitConverter.ToSingle(buffer, 36), BitConverter.ToSingle(buffer, 40), BitConverter.ToSingle(buffer, 44));
+                            hookPos2[key] = new Vector3(BitConverter.ToSingle(buffer, 48), BitConverter.ToSingle(buffer, 52), BitConverter.ToSingle(buffer, 56));
+                            hookPos3[key] = new Vector3(BitConverter.ToSingle(buffer, 60), BitConverter.ToSingle(buffer, 64), BitConverter.ToSingle(buffer, 68));
+                            listUpdated[key] = true;
                         }
 
-                        lock (_lock) 
-                        {
-                            if (isValidData)
-                            {
-                                position[key] = new Vector3(tempX, tempY, tempZ);
-                                rotation[key] = new Vector3(-BitConverter.ToSingle(buffer, 12), -BitConverter.ToSingle(buffer, 16), -BitConverter.ToSingle(buffer, 20));
-                                translation[key] = new Vector3(BitConverter.ToSingle(buffer, 24), BitConverter.ToSingle(buffer, 28), BitConverter.ToSingle(buffer, 32));
-
-                                hookPos1[key] = new Vector3(BitConverter.ToSingle(buffer, 36), BitConverter.ToSingle(buffer, 40), BitConverter.ToSingle(buffer, 44));
-                                hookPos2[key] = new Vector3(BitConverter.ToSingle(buffer, 48), BitConverter.ToSingle(buffer, 52), BitConverter.ToSingle(buffer, 56));
-                                hookPos3[key] = new Vector3(BitConverter.ToSingle(buffer, 60), BitConverter.ToSingle(buffer, 64), BitConverter.ToSingle(buffer, 68));
-
-                                listUpdated[key] = true;
-                            }
-                        }
                     }
                     else if (messageId == 2) // Read crane status
                     {
