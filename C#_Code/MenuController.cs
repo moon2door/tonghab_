@@ -403,30 +403,53 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
 
                             Toggle toggle = trCheckbox.GetComponent<Toggle>();
 
-                            // 기존 리스너 제거
-                            toggle.onValueChanged.RemoveAllListeners();
-
-                            // 딕셔너리 값 반영
-                            if (craneVisibility.ContainsKey(craneKey))
-                            {
-                                toggle.isOn = craneVisibility[craneKey];
-                            }
-                            else
+                            if (!craneVisibility.ContainsKey(craneKey))
                             {
                                 craneVisibility.Add(craneKey, true);
-                                toggle.isOn = true;
                             }
 
-                            // 리스너 등록 (여기서도 craneKey 사용)
-                            toggle.onValueChanged.AddListener((bool isOn) => {
-                                if (craneVisibility.ContainsKey(craneKey))
-                                {
-                                    craneVisibility[craneKey] = isOn;
+                            bool targetValue = craneVisibility[craneKey];
 
-                                    PlayerPrefs.SetInt("CraneVis_" + craneKey, isOn ? 1 : 0);
-                                    PlayerPrefs.Save();
-                                }
-                            });
+                            if (toggle.isOn != targetValue)
+                            {
+                                toggle.onValueChanged.RemoveAllListeners();
+
+                                toggle.isOn = targetValue;
+
+                                toggle.onValueChanged.AddListener((bool isOn) =>
+                                {
+                                    if (craneVisibility.ContainsKey(craneKey))
+                                    {
+                                        craneVisibility[craneKey] = isOn;
+                                        PlayerPrefs.SetInt("CraneVis_" + craneKey, isOn ? 1 : 0);
+                                        PlayerPrefs.Save();
+
+                                        if (socketObject != null)
+                                        {
+                                            socketObject.SendCheckingStatus(currentPier, index, isOn);
+                                        }
+                                    }
+                                });
+                            }
+
+                            else if (toggle.onValueChanged.GetPersistentEventCount() == 0)
+                            {
+                                toggle.onValueChanged.RemoveAllListeners(); // 깔끔하게 초기화
+                                toggle.onValueChanged.AddListener((bool isOn) =>
+                                {
+                                    if (craneVisibility.ContainsKey(craneKey))
+                                    {
+                                        craneVisibility[craneKey] = isOn;
+                                        PlayerPrefs.SetInt("CraneVis_" + craneKey, isOn ? 1 : 0);
+                                        PlayerPrefs.Save();
+
+                                        if (socketObject != null)
+                                        {
+                                            socketObject.SendCheckingStatus(currentPier, index, isOn);
+                                        }
+                                    }
+                                });
+                            }
                         }
                     }
 
@@ -462,6 +485,11 @@ public class MenuController : MonoBehaviour, IPointerUpHandler
     public void OnButtonCooperation()
     {
         cooperationMenu.SetActive(!cooperationMenu.activeSelf);
+    }
+
+    public void RefreshStatusUI()
+    {
+        bUpdateTimestamp = true;
     }
 
     public void OnButtonLogin()

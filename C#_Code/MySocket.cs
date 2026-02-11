@@ -50,6 +50,9 @@ public class MySocket : MonoBehaviour
 
     private object _lock = new object(); // 자물쇠 추가
 
+    private Queue<StructDefines.StRequestSetCheckingStatus> checkStatusQueue = new Queue<StructDefines.StRequestSetCheckingStatus>();
+    private object _checkStatusLock = new object();
+
     // Start is called before the first frame update
     void Start()
     {
@@ -176,7 +179,46 @@ public class MySocket : MonoBehaviour
 
     void Update()
     {
+        ProcessCheckStatusQueue();
         UpdateModels();
+    }
+
+    private void ProcessCheckStatusQueue()
+    {
+        bool needRefresh = false;
+
+        lock (_checkStatusLock)
+        {
+            while (checkStatusQueue.Count > 0)
+            {
+                var msg = checkStatusQueue.Dequeue();
+                int key = craneInfo.GetCraneKeycode(msg.pierId, msg.craneId);
+                bool isOn = (msg.isChecking == 1);
+
+                // 딕셔너리 값 변경
+                if (menu.craneVisibility.ContainsKey(key))
+                {
+                    // 값이 실제로 다를 때만 갱신 (불필요한 갱신 방지)
+                    if (menu.craneVisibility[key] != isOn)
+                    {
+                        menu.craneVisibility[key] = isOn;
+                        Debug.Log($"[수신 적용] Key: {key} (Pier:{msg.pierId}/Crane:{msg.craneId}) -> {isOn}");
+                        needRefresh = true;
+                    }
+                }
+                else
+                {
+                    menu.craneVisibility.Add(key, isOn);
+                    needRefresh = true;
+                }
+            }
+        }
+
+        // 변경 사항이 있었다면 UI 갱신 요청
+        if (needRefresh && menu != null)
+        {
+            menu.RefreshStatusUI(); // <-- 여기가 핵심! 이 함수가 호출되어야 체크박스가 바뀝니다.
+        }
     }
 
     //pjh
@@ -363,7 +405,9 @@ public class MySocket : MonoBehaviour
                     else if (messageId == 2) // Read crane status
                     {
                         int pos = 0;
-                        int remained = 4 * 16 * 4;
+
+                        int remained = 4 * 16 * 5;
+
                         while (remained > 0)
                         {
                             int nRead = stream.Read(buffer, pos, remained);
@@ -375,6 +419,7 @@ public class MySocket : MonoBehaviour
                         float[] distance = new float[16];
                         int[] distanceStatus = new int[16];
                         int[] dataStatus = new int[16];
+                        int[] checkStatus = new int[16]; // [추가] 체크박스 상태 배열
 
                         for (int i = 0; i < 16; ++i)
                         {
@@ -382,9 +427,25 @@ public class MySocket : MonoBehaviour
                             distance[i] = BitConverter.ToSingle(buffer, 4 * 16 + i * 4);
                             distanceStatus[i] = BitConverter.ToInt32(buffer, 4 * 32 + i * 4);
                             dataStatus[i] = BitConverter.ToInt32(buffer, 4 * 48 + i * 4);
+
+                            checkStatus[i] = BitConverter.ToInt32(buffer, 4 * 64 + i * 4);
                         }
 
-                        // 현재 안벽의 활성화된 크레인 개수
+                        lock (_checkStatusLock)
+                        {
+                            for (int i = 0; i < 16; ++i)
+                            {
+                                if (craneInfo.Contains(pierId, i))
+                                {
+                                    bool isOn = (checkStatus[i] == 1);
+
+                                    StructDefines.StRequestSetCheckingStatus statusMsg =
+                                        new StructDefines.StRequestSetCheckingStatus(pierId, i, isOn);
+                                    checkStatusQueue.Enqueue(statusMsg);
+                                }
+                            }
+                        }
+
                         int numCranes = 0;
                         for (int i = 0; i < craneInfo.cranePierCode.Count; i++)
                         {
@@ -811,6 +872,28 @@ public class MySocket : MonoBehaviour
                             menu.UpdateLogPlayInfo(logMessage.startTime, logMessage.endTime, logMessage.curTime);
                         }
                     }
+
+                    else if (messageId == 19) 
+                    {
+                        int pos = 0;
+                        int remained = StructDefines.StRequestSetCheckingStatus.byteSize;
+                        while (remained > 0)
+                        {
+                            int nRead = stream.Read(buffer, pos, remained);
+                            pos += nRead;
+                            remained -= nRead;
+                        }
+
+                        StructDefines.StRequestSetCheckingStatus statusMsg = new StructDefines.StRequestSetCheckingStatus();
+                        if (statusMsg.FromBytes(buffer))
+                        {
+                            lock (_checkStatusLock)
+                            {
+                                checkStatusQueue.Enqueue(statusMsg);
+                            }
+                        }
+                    }
+
                     else
                     {
                     }
@@ -890,6 +973,27 @@ public class MySocket : MonoBehaviour
 
         NetworkStream stream = clientSocket.GetStream();
         stream.Write(bufferSend, 0, size);
+    }
+
+    public void SendCheckingStatus(int pierId, int craneId, bool isOn)
+    {
+        if (clientSocket == null || !clientSocket.Connected) return;
+
+        StructDefines.StRequestSetCheckingStatus message =
+            new StructDefines.StRequestSetCheckingStatus(pierId, craneId, isOn);
+
+        int size = message.ToBytes(ref bufferSend);
+
+        try
+        {
+            NetworkStream stream = clientSocket.GetStream();
+            stream.Write(bufferSend, 0, size);
+            Debug.Log($"Send Checking Status: Pier {pierId}, Crane {craneId}, State {isOn}");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("SendCheckingStatus Error: " + e.Message);
+        }
     }
 
     //pjh

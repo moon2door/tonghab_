@@ -678,4 +678,55 @@ namespace StructDefines
             return ret;
         }
     }
+
+    public struct StRequestSetCheckingStatus
+    {
+        public const uint messageId = 19;
+        public int pierId;
+        public int craneId;
+        public int isChecking; // 1: On(Visible), 0: Off(Hidden)
+
+        public const int byteSize = 4; // 헤더 제외 순수 데이터 크기 (int 1개)
+
+        // 생성자
+        public StRequestSetCheckingStatus(int pierId, int craneId, bool isOn)
+        {
+            this.pierId = pierId;
+            this.craneId = craneId;
+            this.isChecking = isOn ? 1 : 0;
+        }
+
+        // 수신용 (헤더는 이미 읽혔다고 가정하고 바디만 파싱)
+        public bool FromBytes(byte[] byteArray)
+        {
+            if (byteArray.Length >= byteSize)
+            {
+                isChecking = BitConverter.ToInt32(byteArray, 0);
+                return true;
+            }
+            return false;
+        }
+
+        // 송신용 (헤더 포함 전체 패킷 생성)
+        public int ToBytes(ref byte[] byteArray)
+        {
+            byte[] _messageId = BitConverter.GetBytes(messageId);
+            byte[] _pierId = BitConverter.GetBytes(pierId);
+            byte[] _craneId = BitConverter.GetBytes(craneId);
+            byte[] _isChecking = BitConverter.GetBytes(isChecking);
+
+            int pos = 0;
+            Array.Clear(byteArray, 0, byteArray.Length);
+
+            // Header (12 bytes)
+            Array.Copy(_messageId, 0, byteArray, pos, _messageId.Length); pos += _messageId.Length;
+            Array.Copy(_pierId, 0, byteArray, pos, _pierId.Length); pos += _pierId.Length;
+            Array.Copy(_craneId, 0, byteArray, pos, _craneId.Length); pos += _craneId.Length;
+
+            // Body
+            Array.Copy(_isChecking, 0, byteArray, pos, _isChecking.Length); pos += _isChecking.Length;
+
+            return pos;
+        }
+    }
 }
