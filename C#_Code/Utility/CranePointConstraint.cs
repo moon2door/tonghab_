@@ -14,6 +14,7 @@ public class CranePointConstraint : MonoBehaviour
 
     private Vector3 lockedPositionXZ;
     private bool isLocked = false; // 실제로 고정이 시작되었는지 여부
+    public bool YLock = false; // [수정] Y축 고정 옵션
 
     public bool IsLocked => isLocked;
 
@@ -31,7 +32,7 @@ public class CranePointConstraint : MonoBehaviour
     {
         yield return new WaitForSeconds(lockDelay);
 
-        lockedPositionXZ = transform.position;
+        lockedPositionXZ = transform.position; // 이 시점의 Y값도 함께 저장됨
         isLocked = true;
 
         //Debug.Log($"[CranePointConstraint] {name} 위치 고정 완료: {lockedPositionXZ}");
@@ -47,7 +48,9 @@ public class CranePointConstraint : MonoBehaviour
 
         Vector3 currentPos = transform.position;
 
-        Vector3 correctedPos = new Vector3(lockedPositionXZ.x, currentPos.y, lockedPositionXZ.z);
+        float targetY = YLock ? lockedPositionXZ.y : currentPos.y;
+
+        Vector3 correctedPos = new Vector3(lockedPositionXZ.x, targetY, lockedPositionXZ.z);
 
         transform.position = correctedPos;
 
@@ -56,13 +59,16 @@ public class CranePointConstraint : MonoBehaviour
             cwc.Wire__C();
         }
     }
+
     public Vector3 GetLockedPosition()
     {
         if (!isLocked) return transform.position;
 
-        return new Vector3(lockedPositionXZ.x, transform.position.y, lockedPositionXZ.z);
-    }
+        // [수정] 외부에서 위치를 가져올 때도 YLock 상태 반영
+        float returnY = YLock ? lockedPositionXZ.y : transform.position.y;
 
+        return new Vector3(lockedPositionXZ.x, returnY, lockedPositionXZ.z);
+    }
 
     public void ResetLockPosition()
     {
